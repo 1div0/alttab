@@ -307,7 +307,7 @@ int pngReadToDrawable_test(char *pngfile)
     XFlush(dpy);
 
     if (pngReadToDrawable(pngfile, p, 255, 255, 255) != 1) {
-        fprintf(stderr, "can't read png to drawadle\n");
+        fprintf(stderr, "can't read png to drawable\n");
         return 0;
     }
 
