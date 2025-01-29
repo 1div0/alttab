@@ -1,10 +1,10 @@
 .\" generated with Ronn-NG/v0.9.1
 .\" http://github.com/apjanke/ronn-ng/tree/0.9.1
-.TH "ALTTAB" "1" "March 2022" ""
+.TH "ALTTAB" "1" "May 2024" ""
 .SH "NAME"
 \fBalttab\fR \- the task switcher
 .SH "SYNOPSIS"
-\fBalttab\fR [\fB\-w\fR \fIN\fR] [\fB\-d\fR \fIN\fR] [\fB\-sc\fR \fIN\fR] [\fB\-mk\fR \fIstr\fR] [\fB\-kk\fR \fIstr\fR] [\fB\-bk\fR \fIstr\fR] [\fB\-pk\fR \fIstr\fR] [\fB\-nk\fR \fIstr\fR] [\fB\-mm\fR \fIN\fR] [\fB\-bm\fR \fIN\fR] [\fB\-t\fR \fINxM\fR] [\fB\-i\fR \fINxM\fR] [\fB\-vp\fR \fIstr\fR] [\fB\-p\fR \fIstr\fR] [\fB\-s\fR \fIN\fR] [\fB\-theme\fR \fIname\fR] [\fB\-bg\fR \fIcolor\fR] [\fB\-fg\fR \fIcolor\fR] [\fB\-frame\fR \fIcolor\fR] [\fB\-inact\fR \fIcolor\fR] [\fB\-bc\fR \fIcolor\fR] [\fB\-bw\fR \fIN\fR] [\fB\-font\fR \fIname\fR] [\fB\-vertical\fR] [\fB\-e\fR] [\fB\-v\fR|\fB\-vv\fR]
+\fBalttab\fR [\fB\-w\fR \fIN\fR] [\fB\-d\fR \fIN\fR] [\fB\-sc\fR \fIN\fR] [\fB\-mk\fR \fIstr\fR] [\fB\-kk\fR \fIstr\fR] [\fB\-bk\fR \fIstr\fR] [\fB\-pk\fR \fIstr\fR] [\fB\-nk\fR \fIstr\fR] [\fB\-ck\fR \fIstr\fR] [\fB\-dk\fR \fIstr\fR] [\fB\-mm\fR \fIN\fR] [\fB\-bm\fR \fIN\fR] [\fB\-t\fR \fINxM\fR] [\fB\-i\fR \fINxM\fR] [\fB\-vp\fR \fIstr\fR] [\fB\-p\fR \fIstr\fR] [\fB\-s\fR \fIN\fR] [\fB\-theme\fR \fIname\fR] [\fB\-bg\fR \fIcolor\fR] [\fB\-fg\fR \fIcolor\fR] [\fB\-frame\fR \fIcolor\fR] [\fB\-inact\fR \fIcolor\fR] [\fB\-bc\fR \fIcolor\fR] [\fB\-bw\fR \fIN\fR] [\fB\-font\fR \fIname\fR] [\fB\-vertical\fR] [\fB\-e\fR] [\fB\-b\fR \fIN\fR] [\fB\-ns\fR] [\fB\-v\fR|\fB\-vv\fR]
 .SH "DESCRIPTION"
 The task switcher designed for minimalistic window managers or standalone X11 session\.
 .P
@@ -31,7 +31,7 @@ Compatible WM list is in [SEE ALSO] below\. alttab functions in xmonad (EWMH mus
 .IP
 \fI2\fR: Ratpoison\.
 .IP
-Alttab uses ratpoison own remote control capability\. Additionally, alttab registers itself in its "unmanaged list" automatically\.
+Alttab uses ratpoison own remote control capability\. Also, alttab registers itself in its "unmanaged list" automatically\.
 .IP
 \fI3\fR: Ancient WM\.
 .IP
@@ -42,7 +42,7 @@ resource: alttab\.desktops
 .br
 default: \fI0\fR
 .IP
-Show windows belonging to desktops (workspaces, groups)\. \fINUMBER\fR must be between 0 and 3:
+Show windows belonging to desktops (workspaces, groups)\. \fINUMBER\fR must be between 0 and 4:
 .IP
 \fI0\fR: Current desktop\.
 .IP
@@ -55,6 +55,8 @@ This is default, although in non EWMH\-compatible WM, except ratpoison, it's eff
 In various EWMH WM this desktop may be designed hidden or containing sticky windows\. In i3, it's "scratchpad"\.
 .IP
 \fI3\fR: All desktops, excluding current and special\.
+.IP
+\fI4\fR: Special (\-1) desktop only\.
 .TP
 \fB\-sc\fR \fINUMBER\fR
 resource: alttab\.screens
@@ -74,7 +76,7 @@ This is default\.
 \fB\-mk\fR \fIstr\fR
 resource: alttab\.modifier\.keysym
 .br
-default: Alt_L
+default: Alt_L (i\.e\. Left Alt)
 .IP
 Keysym of main modifier\. String or number accepted\. Suitable examples: Control_L, Super_L\.
 .TP
@@ -113,6 +115,13 @@ default: Escape
 .IP
 Keysym of auxiliary 'cancel' key\.
 .TP
+\fB\-dk\fR \fIstr\fR
+resource: alttab\.killkey\.keysym
+.br
+default: k
+.IP
+Keysym of key for killing X client to which currently selected window belongs\.
+.TP
 \fB\-mm\fR \fINUM\fR
 resource: alttab\.modifier\.mask
 .IP
@@ -144,7 +153,7 @@ default: \fIfocus\fR
 .IP
 Limit viewport for the switcher\. The switcher always has variable size and position, but tries to never break out of \fB\-vp\fR container, while \fB\-p\fR specifies position relative to this container\. Together these options allow for WM\-independent multi\-monitor support\. Possible values for \fB\-vp\fR:
 .IP
-\fIfocus\fR: in multihead configuration: the monitor which shows largest part of currently focused window\. If this part is shared with other monitors, then the smallest of these monitors is choosen\. In single head configuration: the geometry of default root window\.
+\fIfocus\fR: in multihead configuration: the monitor which shows largest part of currently focused window\. If this part is shared with other monitors, then the smallest of these monitors is chosen\. In single head configuration: the geometry of default root window\.
 .IP
 \fIpointer\fR: the monitor which has mouse pointer, otherwise the same as \fIfocus\fR\.
 .IP
@@ -170,7 +179,7 @@ resource: alttab\.icon\.source
 .br
 default: 2
 .IP
-Source of icons\. \fINUMBER\fR must be between 0 and 3:
+Source of icons\. \fINUMBER\fR must be between 0 and 5:
 .IP
 \fI0\fR: Use icons from X11 window attributes only\.
 .IP
@@ -197,6 +206,10 @@ Also, alttab scans for icons in legacy directories without freedesktop directory
 \fI2\fR: Prefer icon from file when it matches requested size better (see \fB\-i\fR option)\.
 .IP
 \fI3\fR: Use icons from files only\.
+.IP
+\fI4\fR: Don't draw icons\.
+.IP
+\fI5\fR: Prefer icon from X11 window attributes when it matches requested size better\.
 .TP
 \fB\-theme\fR \fIname\fR
 resource: alttab\.theme
@@ -278,6 +291,26 @@ default: no
 .IP
 On release of Alt, don't switch, keep showing the switcher\. This allows for external call: xdotool key alt+Tab \. See doc/mobile\.md for possible usage\.
 .TP
+\fB\-b\fR \fINUMBER\fR
+resource: alttab\.bottomline
+.br
+default: \fI0\fR
+.IP
+Content of auxiliary line at the bottom of each tile\. \fINUMBER\fR must be between 0 and 2:
+.IP
+\fI0\fR: Empty\.
+.IP
+\fI1\fR: Index of desktop to which the window belongs, starting from zero\.
+.IP
+\fI2\fR: User name\. Requires _NET_WM_PID freedesktop property and /proc file system\.
+.TP
+\fB\-ns\fR
+resource: alttab\.noskiptaskbar
+.br
+default: no
+.IP
+Ignore application request of not including a window on a taskbar\.
+.TP
 \fB\-v\fR, \fB\-vv\fR
 resource: no
 .br
@@ -290,7 +323,7 @@ short help
 .SH "CAVEATS"
 Run alttab after WM, or autodetection will fail\.
 .SH "AUTHOR"
-Copyright 2017\-2021 Alexander Kulak \fB<sa\-dev AT odd POINT systems>\fR\.
+Copyright 2017\-2024 Alexander Kulak \fB<sa\-dev AT odd POINT systems>\fR\.
 .SH "REPORTING BUGS"
 Please report issues on github \fIhttps://github\.com/sagb/alttab/issues\fR\.
 .SH "SEE ALSO"

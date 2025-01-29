@@ -1,7 +1,7 @@
 /*
 Interface with foreign windows common for all WMs.
 
-Copyright 2017-2021 Alexander Kulak.
+Copyright 2017-2024 Alexander Kulak.
 This file is part of alttab program.
 
 alttab is free software: you can redistribute it and/or modify
@@ -22,6 +22,9 @@ along with alttab.  If not, see <http://www.gnu.org/licenses/>.
 #include <X11/Xutil.h>
 #include <X11/Xft/Xft.h>
 #include <X11/Xatom.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <pwd.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -149,7 +152,7 @@ int startupWintasks()
 
     g.sortlist = NULL;          // utlist head must be initialized to NULL
     g.ic = NULL;                // uthash too
-    if (g.option_iconSrc != ISRC_RAM) {
+    if (g.option_iconSrc != ISRC_RAM && g.option_iconSrc != ISRC_NONE) {
         initIconHash(&(g.ic));
     }
     // root: watching for _NET_ACTIVE_WINDOW
@@ -221,7 +224,7 @@ int addIconFromProperty(WindowInfo * wi)
             n += w*h;
             continue;
         }
-        if (best == 0 || iconMatchBetter(w, h, best_w, best_h)) {
+        if (best == 0 || iconMatchBetter(w, h, best_w, best_h, false)) {
             best = n;
         }
         n += w*h;
@@ -262,6 +265,9 @@ int addIconFromProperty(WindowInfo * wi)
     wi->icon_allocated = true;
     wi->icon_w = best_w;
     wi->icon_h = best_h;
+#ifdef ICON_DEBUG
+    snprintf(wi->icon_src, MAXNAMESZ, "from %s", NWI);
+#endif
     XFree(img);
     free(image32);
     free(pro);
@@ -302,13 +308,15 @@ int addIconFromHints(WindowInfo * wi)
     } else {
         msg(0, "no WM hints (%s)\n", wi->name);
     }
+    if (hicon == 0)
+        return 0;
+    wi->icon_drawable = hicon;
     if (hmask != 0)
         wi->icon_mask = hmask;
-    if (hicon != 0) {
-        wi->icon_drawable = hicon;
-        return 1;
-    }
-    return 0;
+#ifdef ICON_DEBUG
+    strcpy(wi->icon_src, "from WM hints");
+#endif
+    return 1;
 }
 
 //
@@ -323,7 +331,7 @@ int addIconFromHints(WindowInfo * wi)
 //
 int addIconFromFiles(WindowInfo * wi)
 {
-    char *appclass, *tryclass;
+    char *appclass, *tryclass, *s;
     long unsigned int class_size;
     icon_t *ic;
     int ret = 0;
@@ -332,12 +340,23 @@ int addIconFromFiles(WindowInfo * wi)
     if (appclass) {
         for (tryclass = appclass; tryclass - appclass < class_size;
              tryclass += (strlen(tryclass) + 1)) {
+            s = tryclass;
+            while ((s = strchr(s, '/')) != NULL) *s++ = '_';
             ic = lookupIcon(tryclass);
-            if (ic &&
-                (g.option_iconSrc != ISRC_SIZE
-                 || iconMatchBetter(ic->src_w, ic->src_h,
-                                    wi->icon_w, wi->icon_h))
-                ) {
+            if (ic && (
+                (g.option_iconSrc != ISRC_SIZE 
+                        && g.option_iconSrc != ISRC_SIZE2)
+                 || (g.option_iconSrc == ISRC_SIZE 
+                        && iconMatchBetter(
+                                    ic->src_w, ic->src_h,
+                                    wi->icon_w, wi->icon_h,
+                                    false))
+                 || (g.option_iconSrc == ISRC_SIZE2 
+                        && iconMatchBetter(
+                                    ic->src_w, ic->src_h,
+                                    wi->icon_w, wi->icon_h,
+                                    true))
+                )) {
                 msg(0, "using file icon for %s\n", tryclass);
                 if (ic->drawable == None) {
                     msg(1, "loading content for %s\n", ic->app);
@@ -358,6 +377,9 @@ int addIconFromFiles(WindowInfo * wi)
                 }
                 wi->icon_drawable = ic->drawable;
                 wi->icon_mask = ic->mask;
+#ifdef ICON_DEBUG
+                strncpy(wi->icon_src, ic->src_path, MAXNAMESZ);
+#endif
                 ret = 1;
                 goto out;
             }
@@ -375,31 +397,37 @@ out:
 // used by x, rp, ...
 // only dpy and win are mandatory
 //
+#define WI g.winlist[g.maxNdx]  // current WindowInfo
 int addWindowInfo(Window win, int reclevel, int wm_id, unsigned long desktop,
                   char *wm_name)
 {
     if (!(g.winlist = realloc(g.winlist, (g.maxNdx + 1) * sizeof(WindowInfo))))
         return 0;
-    g.winlist[g.maxNdx].id = win;
-    g.winlist[g.maxNdx].wm_id = wm_id;
+    WI.id = win;
+    WI.wm_id = wm_id;
 
 // 1. get name
 
     if (wm_name) {
-        strncpy(g.winlist[g.maxNdx].name, wm_name, MAXNAMESZ-1);
+        strncpy(WI.name, wm_name, MAXNAMESZ-1);
     } else {
-        unsigned char *wn;
-        Atom prop = XInternAtom(dpy, "WM_NAME", false), type;
-        int form;
-        unsigned long remain, len;
-        if (XGetWindowProperty(dpy, win, prop, 0, MAXNAMESZ, false,
-                               AnyPropertyType, &type, &form, &len,
-                               &remain, &wn) == Success && wn) {
-            strncpy(g.winlist[g.maxNdx].name, (char *)wn, MAXNAMESZ-1);
-            g.winlist[g.maxNdx].name[MAXNAMESZ - 1] = '\0';
-            XFree(wn);
+        // handle COMPOUND WM_NAME, see #177.
+        XTextProperty text_prop;
+        char **list = NULL;
+        int count;
+        if (XGetWMName(dpy, win, &text_prop) && text_prop.value) {
+            // trying to interpret the name as a UTF-8
+            if (Xutf8TextPropertyToTextList(dpy, &text_prop, &list, &count) >= Success && count > 0 && list) {
+                strncpy(WI.name, list[0], MAXNAMESZ - 1);
+                WI.name[MAXNAMESZ - 1] = '\0';
+                XFreeStringList(list);
+            } else {
+                strncpy(WI.name, (char *)text_prop.value, MAXNAMESZ - 1);
+                WI.name[MAXNAMESZ - 1] = '\0';
+            }
+            XFree(text_prop.value);
         } else {
-            g.winlist[g.maxNdx].name[0] = '\0';
+            WI.name[0] = '\0';
         }
     }                           // guessing name without WM hints
 
@@ -412,76 +440,120 @@ int addWindowInfo(Window win, int reclevel, int wm_id, unsigned long desktop,
 //      it's more sophisticated than icon_drawable=win, because hidden window contents aren't available.
 // * understand hints->icon_window (twm concept, xterm).
 
-    g.winlist[g.maxNdx].icon_drawable =
-        g.winlist[g.maxNdx].icon_mask =
-        g.winlist[g.maxNdx].icon_w = g.winlist[g.maxNdx].icon_h = 0;
+    WI.icon_drawable =
+        WI.icon_mask =
+        WI.icon_w = WI.icon_h = 0;
     unsigned int icon_depth = 0;
-    g.winlist[g.maxNdx].icon_allocated = false;
+    WI.icon_allocated = false;
+#ifdef ICON_DEBUG
+    WI.icon_src[0] = '\0';
+#endif
 
     // search for icon in window properties, hints or file hash
     int opt = g.option_iconSrc;
     int icon_in_x = 0;
+    if (opt == ISRC_NONE)
+        goto endIcon;
     if (opt != ISRC_FILES) {
-        icon_in_x = addIconFromProperty(&(g.winlist[g.maxNdx]));
+        icon_in_x = addIconFromProperty(&(WI));
         if (!icon_in_x)
-            icon_in_x = addIconFromHints(&(g.winlist[g.maxNdx]));
+            icon_in_x = addIconFromHints(&(WI));
     }
     if ((opt == ISRC_FALLBACK && !icon_in_x) ||
-        opt == ISRC_SIZE || opt == ISRC_FILES)
-        addIconFromFiles(&(g.winlist[g.maxNdx]));
+        opt == ISRC_SIZE || opt == ISRC_SIZE2 || opt == ISRC_FILES)
+        addIconFromFiles(&(WI));
 
     // extract icon width/height/depth
     Window root_return;
     int x_return, y_return;
     unsigned int border_width_return;
-    if (g.winlist[g.maxNdx].icon_drawable) {
-        if (XGetGeometry(dpy, g.winlist[g.maxNdx].icon_drawable,
+    if (WI.icon_drawable) {
+        if (XGetGeometry(dpy, WI.icon_drawable,
                          &root_return, &x_return, &y_return,
-                         &(g.winlist[g.maxNdx].icon_w),
-                         &(g.winlist[g.maxNdx].icon_h),
+                         &(WI.icon_w),
+                         &(WI.icon_h),
                          &border_width_return, &icon_depth) == 0) {
-            msg(0, "icon dimensions unknown (%s)\n", g.winlist[g.maxNdx].name);
+            msg(0, "icon dimensions unknown (%s)\n", WI.name);
             // probably draw placeholder?
-            g.winlist[g.maxNdx].icon_drawable = 0;
+            WI.icon_drawable = 0;
         } else {
             msg(1, "depth=%d\n", icon_depth);
         }
     }
 // convert icon with different depth (currently 1 only) into default depth
-    if (g.winlist[g.maxNdx].icon_drawable && icon_depth == 1) {
+    if (WI.icon_drawable && icon_depth == 1) {
         msg(0,
             "rebuilding icon from depth %d to %d (%s)\n",
-            icon_depth, XDEPTH, g.winlist[g.maxNdx].name);
-        Pixmap pswap = XCreatePixmap(dpy, g.winlist[g.maxNdx].icon_drawable,
-                                     g.winlist[g.maxNdx].icon_w,
-                                     g.winlist[g.maxNdx].icon_h, XDEPTH);
+            icon_depth, XDEPTH, WI.name);
+        Pixmap pswap = XCreatePixmap(dpy, WI.icon_drawable,
+                                     WI.icon_w,
+                                     WI.icon_h, XDEPTH);
         if (!pswap)
             die("can't create pixmap");
         // GC should be already prepared in uiShow
         if (!XCopyPlane
-            (dpy, g.winlist[g.maxNdx].icon_drawable, pswap, g.gcDirect,
-             0, 0, g.winlist[g.maxNdx].icon_w,
-             g.winlist[g.maxNdx].icon_h, 0, 0, 1))
+            (dpy, WI.icon_drawable, pswap, g.gcDirect,
+             0, 0, WI.icon_w,
+             WI.icon_h, 0, 0, 1))
             die("can't copy plane");    // plane #1?
-        g.winlist[g.maxNdx].icon_drawable = pswap;
-        g.winlist[g.maxNdx].icon_allocated = true;  // for subsequent free()
+        WI.icon_drawable = pswap;
+        WI.icon_allocated = true;  // for subsequent free()
         icon_depth = XDEPTH;
     }
-    if (g.winlist[g.maxNdx].icon_drawable && icon_depth != XDEPTH) {
+    if (WI.icon_drawable && icon_depth != XDEPTH) {
         msg(-1,
             "can't handle icon depth other than %d or 1 (%d, %s). Please report this condition.\n",
-            XDEPTH, icon_depth, g.winlist[g.maxNdx].name);
-        g.winlist[g.maxNdx].icon_drawable = g.winlist[g.maxNdx].icon_w =
-            g.winlist[g.maxNdx].icon_h = 0;
+            XDEPTH, icon_depth, WI.name);
+        WI.icon_drawable = WI.icon_w =
+            WI.icon_h = 0;
     }
+endIcon:
+
 // 3. sort
 
     addToSortlist(win, false, false);
 
-// 4. other window data
+// 4. bottom line
 
-    g.winlist[g.maxNdx].reclevel = reclevel;
-    g.winlist[g.maxNdx].desktop = desktop;
+    WI.bottom_line[0] = '\0';
+    long unsigned int nws, *pid;
+    char procd[32];
+    int sr;
+    struct stat st;
+    struct passwd *gu;
+    switch(g.option_bottom_line) {
+        case BL_DESKTOP:
+            if (desktop != DESKTOP_UNKNOWN)
+                snprintf(WI.bottom_line, MAXNAMESZ, "%ld", desktop);
+            else
+                strncpy(WI.bottom_line, "?", 2);
+            break;
+        case BL_USER:
+            pid = (long unsigned int*)get_x_property(WI.id,
+                    XA_CARDINAL, "_NET_WM_PID", &nws);
+            if (!pid) {
+                strncpy(WI.bottom_line, "[no pid]", 9);
+                break;
+            }
+            snprintf(procd, 32, "/proc/%ld", *pid);
+            sr = stat(procd, &st);
+            if (sr == -1) {
+                strncpy(WI.bottom_line, "[no /proc]", 11);
+                break;
+            }
+            gu = getpwuid(st.st_uid);
+            if (gu == NULL) {
+                strncpy(WI.bottom_line, "[no name]", 10);
+                break;
+            }
+            snprintf(WI.bottom_line, MAXNAMESZ, "%s", gu->pw_name);
+            break;
+    }
+
+// 5. other window data
+
+    WI.reclevel = reclevel;
+    WI.desktop = desktop;
 
     g.maxNdx++;
     msg(1, "window %d, id %lx added to list\n", g.maxNdx, win);
@@ -652,10 +724,10 @@ void winPropChangeEvent(XPropertyEvent e)
         if (usec_delta < 5E5) {  // half a second
             return;
         }
-        msg(0, PREF"pulling 'prev' 0x%lx supressed\n", aw);
+        msg(0, PREF"pulling 'prev' 0x%lx suppressed\n", aw);
     }
     if (aw == g.last.to) {
-        msg(0, PREF"pulling 'to' 0x%lx supressed\n", aw);
+        msg(0, PREF"pulling 'to' 0x%lx suppressed\n", aw);
         return;
     }
 */
@@ -714,6 +786,10 @@ bool common_skipWindow(Window w,
     if (g.option_desktop == DESK_NOCURRENT &&
         (window_desktop == current_desktop || window_desktop == -1)) {
         msg(1, "window on current or -1 desktop, skipped\n");
+        return true;
+    }
+    if (g.option_desktop == DESK_SPECIAL && window_desktop != -1) {
+        msg(1, "window not on -1 desktop, skipped\n");
         return true;
     }
     // man page: -sc 0: Screen is defined according to -vp pointer or -vp focus.

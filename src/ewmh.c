@@ -2,7 +2,7 @@
 Interface with EWMH-compatible window managers.
 Note: _WIN fallbacks are not part of EWMH or ICCCM, but kept here anyway.
 
-Copyright 2017-2021 Alexander Kulak.
+Copyright 2017-2024 Alexander Kulak.
 This file is part of alttab program.
 
 alttab is free software: you can redistribute it and/or modify
@@ -319,6 +319,8 @@ bool ewmh_skipWindowInTaskbar(Window w)
     int i;
     bool ret = false;
 
+    if (g.option_no_skip_taskbar)
+        return false;
     state =
         (Atom *) get_x_property(w, XA_ATOM, "_NET_WM_STATE", &state_propsize);
     if (state == NULL || state_propsize == 0) {

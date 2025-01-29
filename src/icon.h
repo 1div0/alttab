@@ -1,7 +1,7 @@
 /*
 icon.c definitions.
 
-Copyright 2017-2021 Alexander Kulak.
+Copyright 2017-2024 Alexander Kulak.
 This file is part of alttab program.
 
 alttab is free software: you can redistribute it and/or modify
@@ -68,7 +68,7 @@ int loadIconContentPNG(icon_t * ic);
 int loadIconContentXPM(icon_t * ic);
 int loadIconContent(icon_t * ic);   // update drawable
 icon_t *lookupIcon(char *app);  // search app icon in hash
-bool iconMatchBetter(int new_w, int new_h, int old_w, int old_h);
+bool iconMatchBetter(int new_w, int new_h, int old_w, int old_h, bool equal_prefer_new);
 void deleteIconHash(icon_t **ihash);
 
 #endif

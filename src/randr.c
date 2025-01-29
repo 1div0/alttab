@@ -1,7 +1,7 @@
 /*
 Interface to XRANDR
 
-Copyright 2017-2021 Alexander Kulak.
+Copyright 2017-2024 Alexander Kulak.
 This file is part of alttab program.
 
 alttab is free software: you can redistribute it and/or modify
@@ -249,7 +249,7 @@ bool randrGetViewport(quad * res, bool * multihead)
         return true;
     }
     // if best cross-area is shared with some other monitor,
-    // then smallest of these monitors is choosen.
+    // then smallest of these monitors is chosen.
     smallest_2_stage_area =
         oq[best_1_stage_output].w * oq[best_1_stage_output].h;
     for (o = 0; o < no; o++) {

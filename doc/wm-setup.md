@@ -27,7 +27,7 @@ no WM        | 0 (set manually)            | doesn't grab                   | `a
 ratpoison    | 2 (auto)                    | doesn't grab                   | `exec alttab` in ~/.ratpoisonrc
 xmonad       | 1 (with plugin, see below)  | see "xmonad" section below     | 
 dwm          | 1 (auto, partial support)   | ?                              | ?
-i3           | 1 (auto)                    | doesn't grab                   | `exec_always alttab` in ~/.i3/config
+i3           | 1 (auto)                    | doesn't grab                   | `exec_always alttab` in ~/.config/i3/config
 evilwm       | 1 (auto)                    | ?                              | ?
 twm          | 3 (default)                 | doesn't grab                   | ?
 xfwm4/xfce   | 1 (auto)                    | see "xfce" section below       | 
@@ -51,7 +51,7 @@ ctwm         | 1 (auto, see issue #39)     | doesn't grab                   | ?
 lwm          | 1 (auto, issue #40)         | doesn't grab                   | ?
 sawfish      | 1 (auto)                    | doesn't grab                   | ?
 awesome      | 1 (auto)                    | doesn't grab                   | ?
-bspwm        | 1 (auto, see issue #109)    | doesn't grab                   | `alttab &` in ~/.config/bspwm/bspwmrc
+bspwm        | 1 (auto, see #109, #152)    | doesn't grab                   | `alttab &` in ~/.config/bspwm/bspwmrc
 
 
 xmonad
@@ -74,7 +74,7 @@ xfce
 ====
 
 ### keyboard shortcut
-Applications -> Settings -> Settings Editor (not Manager) -> Channel: xfce4-keyboard-shortcuts -> in rigth pane disable all entries of `cycle_windows_key` or `cycle_reverse_windows_key`.
+Applications -> Settings -> Settings Editor (not Manager) -> Channel: xfce4-keyboard-shortcuts -> in right pane disable all entries of `cycle_windows_key` or `cycle_reverse_windows_key`.
 
 ### startup
 Applications -> Settings -> Session and Startup -> Application Autostart -> Add
